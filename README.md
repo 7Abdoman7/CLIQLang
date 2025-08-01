@@ -83,6 +83,37 @@ Interactive Session Commands:
   end
   ```
 
+### Custom Matrix Definitions
+
+Define custom quantum gates using complex matrices. This allows you to create any quantum operation by specifying its matrix representation.
+
+**Syntax:**
+```
+MATRIX: name = [matrix_elements]
+```
+
+**Examples:**
+```
+# Define a custom 2x2 gate (e.g., custom rotation)
+MATRIX: MyGate = [0.707 0.707, -0.707 0.707]
+
+# Use complex numbers with 'i' notation
+MATRIX: PhaseGate = [1 0, 0 0.707+0.707i]
+
+# Define a 4x4 gate for two-qubit operations
+MATRIX: CustomCNOT = [1 0 0 0, 0 1 0 0, 0 0 0 1, 0 0 1 0]
+
+# Apply the custom gate
+MyGate [] [0]
+PhaseGate [] [1]
+```
+
+**Matrix Format:**
+- Elements separated by spaces
+- Rows separated by commas
+- Complex numbers: `real+imagi` or `real-imagi`
+- Square matrices only (2x2, 4x4, 8x8, etc.)
+
 ### Oracle
 
 An Oracle is a quantum operation that marks specific input states by flipping an output qubit. It's commonly used in quantum algorithms like Grover's search.
@@ -161,6 +192,15 @@ ORACLE [0] [1] [1]
 - **Range Example**:
   ```
   H [] [range(0,3)]
+  ```
+
+- **Custom Matrix Example**:
+  ```
+  # Define a custom gate
+  MATRIX: RotY45 = [0.9239 -0.3827, 0.3827 0.9239]
+  
+  # Use the custom gate
+  RotY45 [] [0]
   ```
 
 ## Complete Example

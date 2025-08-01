@@ -10,7 +10,7 @@ CLIQLang is a quantum programming language for defining and executing quantum ci
 
 Run a CLIQ file using the following command:
    ```bash
-   java -cp target/CLIQ-1.0.0-jar-with-dependencies.jar CLIQ.CLI.Main <your-file.cliq>
+   java -jar CLIQLang_version.jar <your-file.cliq>
    ```
 
 

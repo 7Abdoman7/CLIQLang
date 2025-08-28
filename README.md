@@ -4,13 +4,16 @@ CLIQLang is a quantum programming language for defining and executing quantum ci
 
 ## Requirements
 
-- Java 22 or higher is required to run CLIQLang.
+- Linux x86_64 to run the AppImage.
+- No Java required to run the AppImage.
+- For building from source: Java 22+ and Maven.
 
 ## Execution
 
-Run a CLIQ file using the following command:
+Run a CLIQ file using the AppImage:
    ```bash
-   java -jar CLIQLang_version.jar <your-file.cliq>
+   chmod +x CLIQLang-0.1.0-preview-x86_64.AppImage
+   ./CLIQLang-0.1.0-preview-x86_64.AppImage <your-file.cliq>
    ```
 
 
@@ -19,8 +22,42 @@ Interactive Session Commands:
 - `backward` (or `b`): Revert the last gate and show the previous state.
 - `reset` (or `r`): Reset the circuit to its initial |0...0> state.
 - `run`: Run all gates from the current step to the end.
+- `run <shots>`: Run the full circuit from the start for the given number of shots, measuring all qubits at the end of each shot and printing only a summary table of bitstring, count, and probability (no intermediate steps).
+- `frun`: Run all gates to final state (no intermediate steps).
+- `rrun`: Reset, then run all gates from the start.
 - `exit` / `quit`: Exit the application.
 - `help`: Show help message.
+- `show <qubits>`: Show marginal probabilities over the selected qubits only (zero-probability outcomes omitted). Examples: `show 0`, `show 0,2`. Qubits are 0-based with the leftmost qubit as index 0.
+
+## Noise & Fidelity
+
+The simulator supports three configurable error models that can be set during interactive startup or programmatically:
+
+- **Depolarization (probability p)**: After each gate, each affected target qubit receives a random Pauli from {X, Y, Z} with probability p.
+- **Gate Fidelity (F ∈ [0,1])**: Models average gate fidelity. Internally approximated by a single-qubit Pauli channel with probability p = 2 · (1 − F) per affected qubit after each gate.
+- **Decoherence (Amplitude Damping)**:
+  - **Rate**: Probability per affected qubit after each gate that a damping event is attempted.
+  - **Decay Probability**: If a damping event occurs, probability that |1⟩ decays to |0⟩. Implementation uses `QuantumDecoherence.decohere` and preserves normalization.
+
+### Configure via Interactive Startup
+When you launch the simulator without `--skip-config`, you’ll be prompted:
+```
+Noise Depolarization: 0.05
+Decoherence Rate: 0.02
+Decay Probability: 0.10
+Gate Fidelity: 0.995
+```
+
+### Programmatic Usage (Java)
+```java
+CliqExecutor exec = new CliqExecutor(
+    new File("circuit.cliq"),
+    /* depolarizingProb */ 0.05,
+    /* gateFidelity    */ 0.995,
+    /* decoherenceRate */ 0.02,
+    /* decayProbability*/ 0.10
+);
+```
 
 ## Syntax
 
@@ -82,6 +119,80 @@ Interactive Session Commands:
       H [] [0]
   end
   ```
+
+### Definitions (DEFINE)
+
+Introduce file-scoped constants/macros that are substituted during parsing. Useful for angles, loop counts, ranges, and conditions.
+
+**Syntax:**
+```
+DEFINE NAME = value
+DEFINE "string key" = value   # legacy; prefer identifier form
+```
+
+- Values can be numbers or expressions (e.g., `pi/4`, `2*pi`).
+- Substitutions are token-aware and apply to subsequent lines, including inside angles, ranges, and conditionals.
+
+**Examples:**
+```
+# Angle constants
+DEFINE THETA = pi/4
+Rx(THETA) [] [0]
+Rz(2*THETA) [] [1]
+
+# Ranges and loop sizes
+DEFINE N = 3
+H [] [range(0,N)]
+
+# Conditionals
+DEFINE ONE = 1
+if [0] == ONE:
+    X [] [1]
+end
+
+# Macro-like alias (legacy quoted key)
+DEFINE "HGate" = H
+HGate [] [0]
+```
+
+### Macros (MACRO)
+
+Define reusable, parameterized blocks of CLIQ code that expand at parse time.
+
+**Syntax:**
+```
+MACRO Name [param1, param2, ...]:
+    # body (can include gates, DEFINE usage, conditionals, loops)
+end
+
+# Invocation
+Name [arg1, arg2, ...]
+```
+
+- Parameters are substituted token-aware throughout the macro body.
+- Macro bodies can contain nested `if`, `for`, and `while` blocks; expansion respects nested `end` pairing.
+- Macro names are identifiers; invocation uses the same name followed by `[args]` (no colon).
+
+**Examples:**
+```
+DEFINE ANG = pi/4
+
+MACRO RotateAndMeasure [angle, q]:
+    Rz(angle) [] [q]
+    ! [q]
+end
+
+RotateAndMeasure [ANG, 0]
+
+# Parameterized utility
+MACRO ControlH [ctrl, target]:
+    if [ctrl] == 1:
+        H [] [target]
+    end
+end
+
+ControlH [0, 1]
+```
 
 ### Custom Matrix Definitions
 
@@ -160,104 +271,3 @@ ORACLE [0] [1] [1]
   Ph(pi/8) [] [3]
   RPh(pi/4) [1] [4]
   ```
-
-- **Loop Structure**:
-  ```
-  for [2]:
-      X [] [0]
-  end
-  ```
-
-- **Conditional Logic**:
-  ```
-  H [] [0]
-  ! [0]
-  if [0] == 1:
-      X [] [1]
-  end
-  ```
-
-- **Oracle Usage**:
-  ```
-  # Prepare superposition on input qubits
-  H [] [0,1]
-  
-  # Apply oracle that marks states 01 and 10
-  ORACLE [0,1] [2] b[01,10]
-  
-  # Measure all qubits
-  ! [0,1,2]
-  ```
-
-- **Range Example**:
-  ```
-  H [] [range(0,3)]
-  ```
-
-- **Custom Matrix Example**:
-  ```
-  # Define a custom gate
-  MATRIX: RotY45 = [0.9239 -0.3827, 0.3827 0.9239]
-  
-  # Use the custom gate
-  RotY45 [] [0]
-  ```
-
-## Complete Example
-
-Here's a complete example demonstrating multiple features:
-
-```cliq
-# Bell State Creation
-H [] [0]          # Put qubit 0 in superposition
-X [0] [1]         # Create entanglement with CNOT
-
-# Measure and apply conditional operation
-! [0]
-if [0] == 1:
-    Z [] [1]      # Apply Z gate if qubit 0 is measured as 1
-end
-
-# Loop example
-for [3]:
-    Rx(pi/6) [] [2]
-end
-
-# Final measurement
-! [0,1,2]
-```
-
-## Output
-
-The states of qubits and results of measurements are printed to the console as the circuit is executed, allowing for real-time tracking of the quantum state vectors. Each state is displayed with its amplitude and probability.
-
-## Gate Reference
-
-### Standard Gates
-- `X`, `Y`, `Z`: Pauli gates
-- `H`: Hadamard gate (creates superposition)
-- `T`: T gate (π/8 phase gate)
-- `S`: S gate (π/4 phase gate)
-- `SWAP`: Swaps two qubit states
-
-### Parametric Gates
-- `Rx(angle)`: Rotation around X-axis
-- `Ry(angle)`: Rotation around Y-axis  
-- `Rz(angle)`: Rotation around Z-axis
-- `Ph(angle)`: Global phase gate
-- `RPh(angle)`: Relative phase gate
-
-### Angle Expressions
-Angles can be expressed as:
-- `pi/4`, `pi/2`, `2*pi`
-- Decimal values: `0.785`, `1.57`
-- Negative values: `-pi/2`
-
-### Range Function
-- `range(n)`: Qubits 0 to n-1
-- `range(start,end)`: Qubits from start to end-1
-- Example: `range(1,4)` = qubits 1, 2, 3
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
